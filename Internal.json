@@ -3,22 +3,7 @@
     "ƒ.GraphGLTF": {
       "name": "Scene",
       "active": true,
-      "components": {
-        "ComponentTransform": [
-          {
-            "ƒ.ComponentTransform": {
-              "local": {
-                "translation": "[4.400000095367432, 0.4000000059604645, -1.5]",
-                "rotation": "[0, 90, 0]",
-                "scaling": "[1, 1, 1]"
-              },
-              "Component": {
-                "active": true
-              }
-            }
-          }
-        ]
-      },
+      "components": {},
       "idResource": "GraphGLTF|2025-04-18T14:52:01.891Z|03078",
       "type": "GraphGLTF",
       "url": "GLTF\\Desk.glb"
@@ -64,7 +49,22 @@
           "ƒ.Node": {
             "name": "Desk",
             "active": true,
-            "components": {},
+            "components": {
+              "ComponentTransform": [
+                {
+                  "ƒ.ComponentTransform": {
+                    "local": {
+                      "translation": "[2.388965368270874, 0.36032241582870483, 0.27126961946487427]",
+                      "rotation": "[0, 0, 0]",
+                      "scaling": "[1, 1, 1]"
+                    },
+                    "Component": {
+                      "active": true
+                    }
+                  }
+                }
+              ]
+            },
             "children": [
               {
                 "ƒ.GraphInstance": {
