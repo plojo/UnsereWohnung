@@ -1,0 +1,27 @@
+{
+  "Fudge.ResourceFolder": {
+    "name": "Resources",
+    "entries": [
+      {
+        "name": "GLTF",
+        "entries": [
+          {
+            "idResource": "GraphGLTF|2025-04-18T14:52:01.891Z|03078"
+          },
+          {
+            "idResource": "GraphGLTF|2025-04-18T14:52:14.220Z|69558"
+          },
+          {
+            "idResource": "GraphGLTF|2025-04-18T14:52:17.594Z|58763"
+          },
+          {
+            "idResource": "GraphGLTF|2025-04-18T14:52:20.616Z|59624"
+          }
+        ]
+      },
+      {
+        "idResource": "Graph|2025-04-18T14:52:24.473Z|86939"
+      }
+    ]
+  }
+}
