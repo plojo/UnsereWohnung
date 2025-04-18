@@ -14,3 +14,10 @@ canvas.fullscreen {
   width: 100vw; 
   height: 100vh; 
 }
+
+button#toggleFloorPlan {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 1000;
+}
