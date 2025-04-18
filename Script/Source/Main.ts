@@ -24,7 +24,7 @@ namespace Script {
     }
 
     f.Loop.addEventListener(f.EVENT.LOOP_FRAME, update);
-    f.Loop.start();  // start the game loop to continously draw the viewport, update the audiosystem and drive the physics i/a
+    // f.Loop.start();  // start the game loop to continously draw the viewport, update the audiosystem and drive the physics i/a
   }
 
   function update(_event: Event): void {
