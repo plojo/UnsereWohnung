@@ -16,9 +16,18 @@ canvas.fullscreen {
   touch-action: none;
 }
 
-button#toggleFloorPlan {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  z-index: 1000;
+.ui-canvas {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  margin: 1rem;
+  color: white;
+  font-family: 'Arial', sans-serif;
+
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10%, max-content));
+  grid-auto-flow: row dense;
+  gap: 10px;
+  justify-content: start;
+  width: 100%;
 }

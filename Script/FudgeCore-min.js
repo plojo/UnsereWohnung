@@ -364,6 +364,69 @@ var FudgeCore;
 })(FudgeCore || (FudgeCore = {}));
 var FudgeCore;
 (function (FudgeCore) {
+    class RecyclableEvent extends Event {
+        static #depot = {};
+        static #init = {};
+        #target;
+        #currentTarget;
+        #eventPhase;
+        constructor(_type, _bubbles = false, _cancelable = false) {
+            RecyclableEvent.#init.bubbles = _bubbles;
+            RecyclableEvent.#init.cancelable = _cancelable;
+            super(_type, RecyclableEvent.#init);
+            this.path = [];
+        }
+        static get(_type, _bubbles = false, _cancelable = false) {
+            return RecyclableEvent.#depot[`${_type}${_bubbles}${_cancelable}`]?.pop()?.recycle() ?? new RecyclableEvent(_type, _bubbles, _cancelable);
+        }
+        static store(_event) {
+            (RecyclableEvent.#depot[`${_event.type}${_event.bubbles}${_event.cancelable}`] ??= new FudgeCore.RecycableArray()).push(_event);
+        }
+        static dump(_type, _bubbles = false, _cancelable = false) {
+            delete RecyclableEvent.#depot[`${_type}${_bubbles}${_cancelable}`];
+        }
+        static dumpAll() {
+            RecyclableEvent.#depot = {};
+        }
+        static [Symbol.hasInstance](_instance) {
+            return _instance.isRecyclableEvent;
+        }
+        get isRecyclableEvent() {
+            return true;
+        }
+        get target() {
+            return this.#target ?? super.target;
+        }
+        get currentTarget() {
+            return this.#currentTarget ?? super.currentTarget;
+        }
+        get eventPhase() {
+            return this.#eventPhase ?? super.eventPhase;
+        }
+        setTarget(_target) {
+            this.#target = _target;
+            return this;
+        }
+        setCurrentTarget(_currentTarget) {
+            this.#currentTarget = _currentTarget;
+            return this;
+        }
+        setEventPhase(_eventPhase) {
+            this.#eventPhase = _eventPhase;
+            return this;
+        }
+        recycle() {
+            this.#target = null;
+            this.#currentTarget = null;
+            this.#eventPhase = null;
+            this.path.length = 0;
+            return this;
+        }
+    }
+    FudgeCore.RecyclableEvent = RecyclableEvent;
+})(FudgeCore || (FudgeCore = {}));
+var FudgeCore;
+(function (FudgeCore) {
     function getMutatorOfArbitrary(_object) {
         let mutator = {};
         let attributes = Reflect.ownKeys(Reflect.getPrototypeOf(_object));
@@ -2017,6 +2080,7 @@ var FudgeCore;
         }
         static resetFramebuffer() {
             RenderWebGL.crc3.bindFramebuffer(WebGL2RenderingContext.FRAMEBUFFER, RenderWebGL.fboMain);
+            RenderWebGL.crc3.drawBuffers(RenderWebGL.attachmentsColorPositionNormal);
         }
         static setDepthTest(_test) {
             if (_test)
@@ -2708,12 +2772,12 @@ var FudgeCore;
                     ancestor = ancestor.getParent();
                 return ancestor;
             }
-            getPath() {
+            getPath(_out = [], _offset = 0) {
                 let ancestor = this;
-                let path = [this];
-                while (ancestor.getParent())
-                    path.unshift(ancestor = ancestor.getParent());
-                return path;
+                _out[_offset] = ancestor;
+                while ((ancestor = ancestor.getParent()))
+                    _out[++_offset] = ancestor;
+                return _out.reverse();
             }
             getChild(_index) {
                 return this.children[_index];
@@ -2930,29 +2994,55 @@ var FudgeCore;
                             listenersForType.splice(i, 1);
             }
             dispatchEvent(_event) {
-                let ancestors = [];
-                let upcoming = this;
-                Object.defineProperty(_event, "target", { writable: true, value: this });
-                while (upcoming.parent)
-                    ancestors.push(upcoming = upcoming.parent);
-                Object.defineProperty(_event, "path", { writable: true, value: new Array(this, ...ancestors) });
-                Object.defineProperty(_event, "eventPhase", { writable: true, value: Event.CAPTURING_PHASE });
-                for (let i = ancestors.length - 1; i >= 0; i--) {
-                    let ancestor = ancestors[i];
-                    Object.defineProperty(_event, "currentTarget", { writable: true, value: ancestor });
-                    this.callListeners(ancestor.captures[_event.type], _event);
+                if (_event instanceof FudgeCore.RecyclableEvent) {
+                    _event.setTarget(this);
+                    const path = _event.path;
+                    path.length = 0;
+                    this.getPath(path).reverse();
+                    _event.setEventPhase(Event.CAPTURING_PHASE);
+                    for (let i = path.length - 1; i >= 1; i--) {
+                        let ancestor = path[i];
+                        _event.setCurrentTarget(ancestor);
+                        this.callListeners(ancestor.captures[_event.type], _event);
+                    }
+                    _event.setEventPhase(Event.AT_TARGET);
+                    _event.setCurrentTarget(this);
+                    this.callListeners(this.captures[_event.type], _event);
+                    this.callListeners(this.listeners[_event.type], _event);
+                    if (!_event.bubbles)
+                        return true;
+                    _event.setEventPhase(Event.BUBBLING_PHASE);
+                    for (let i = 1; i < path.length; i++) {
+                        let ancestor = path[i];
+                        _event.setCurrentTarget(ancestor);
+                        this.callListeners(ancestor.listeners[_event.type], _event);
+                    }
                 }
-                Object.defineProperty(_event, "eventPhase", { writable: true, value: Event.AT_TARGET });
-                Object.defineProperty(_event, "currentTarget", { writable: true, value: this });
-                this.callListeners(this.captures[_event.type], _event);
-                this.callListeners(this.listeners[_event.type], _event);
-                if (!_event.bubbles)
-                    return true;
-                Object.defineProperty(_event, "eventPhase", { writable: true, value: Event.BUBBLING_PHASE });
-                for (let i = 0; i < ancestors.length; i++) {
-                    let ancestor = ancestors[i];
-                    Object.defineProperty(_event, "currentTarget", { writable: true, value: ancestor });
-                    this.callListeners(ancestor.listeners[_event.type], _event);
+                else {
+                    let ancestors = [];
+                    let upcoming = this;
+                    Object.defineProperty(_event, "target", { writable: true, value: this });
+                    while (upcoming.parent)
+                        ancestors.push(upcoming = upcoming.parent);
+                    Object.defineProperty(_event, "path", { writable: true, value: new Array(this, ...ancestors) });
+                    Object.defineProperty(_event, "eventPhase", { writable: true, value: Event.CAPTURING_PHASE });
+                    for (let i = ancestors.length - 1; i >= 0; i--) {
+                        let ancestor = ancestors[i];
+                        Object.defineProperty(_event, "currentTarget", { writable: true, value: ancestor });
+                        this.callListeners(ancestor.captures[_event.type], _event);
+                    }
+                    Object.defineProperty(_event, "eventPhase", { writable: true, value: Event.AT_TARGET });
+                    Object.defineProperty(_event, "currentTarget", { writable: true, value: this });
+                    this.callListeners(this.captures[_event.type], _event);
+                    this.callListeners(this.listeners[_event.type], _event);
+                    if (!_event.bubbles)
+                        return true;
+                    Object.defineProperty(_event, "eventPhase", { writable: true, value: Event.BUBBLING_PHASE });
+                    for (let i = 0; i < ancestors.length; i++) {
+                        let ancestor = ancestors[i];
+                        Object.defineProperty(_event, "currentTarget", { writable: true, value: ancestor });
+                        this.callListeners(ancestor.listeners[_event.type], _event);
+                    }
                 }
                 return true;
             }
@@ -14287,60 +14377,6 @@ var FudgeCore;
 })(FudgeCore || (FudgeCore = {}));
 var FudgeCore;
 (function (FudgeCore) {
-    const descriptor = { writable: true };
-    function makePropertyWritable(_object, _key) {
-        descriptor.value = _object[_key];
-        Object.defineProperty(_object, _key, descriptor);
-    }
-    class RecyclableEvent extends Event {
-        constructor(_type, _init) {
-            super(_type, _init);
-            makePropertyWritable(this, "bubbles");
-            makePropertyWritable(this, "cancelable");
-            makePropertyWritable(this, "currentTarget");
-            makePropertyWritable(this, "eventPhase");
-            makePropertyWritable(this, "target");
-            makePropertyWritable(this, "type");
-        }
-        static [Symbol.hasInstance](_instance) {
-            return _instance.isRecyclableEvent;
-        }
-        static GET(_type, _bubbles = false, _cancelable = false) {
-            return FudgeCore.Recycler.get(RecyclableEvent).set(_type, _bubbles, _cancelable);
-        }
-        get isRecyclableEvent() {
-            return true;
-        }
-        recycle() {
-            this.type = null;
-            this.target = null;
-            this.currentTarget = null;
-            this.bubbles = false;
-            this.eventPhase = 0;
-        }
-        set(_type, _bubbles = false, _cancelable = false) {
-            this.type = _type;
-            this.bubbles = _bubbles;
-            this.cancelable = _cancelable;
-            return this;
-        }
-        setTarget(_target) {
-            this.target = _target;
-            return this;
-        }
-        setCurrentTarget(_currentTarget) {
-            this.currentTarget = _currentTarget;
-            return this;
-        }
-        setEventPhase(_eventPhase) {
-            this.eventPhase = _eventPhase;
-            return this;
-        }
-    }
-    FudgeCore.RecyclableEvent = RecyclableEvent;
-})(FudgeCore || (FudgeCore = {}));
-var FudgeCore;
-(function (FudgeCore) {
     class Gizmos {
         static { this.alphaOccluded = 0.3; }
         static { this.arrayBuffer = FudgeCore.RenderWebGL.assert(FudgeCore.RenderWebGL.getRenderingContext().createBuffer()); }
@@ -14670,9 +14706,9 @@ var FudgeCore;
         static { this.nodesSimple = new FudgeCore.RecycableArray(); }
         static { this.nodesAlpha = new FudgeCore.RecycableArray(); }
         static { this.componentsSkeleton = new FudgeCore.RecycableArray(); }
-        static #eventPrepare = FudgeCore.RecyclableEvent.GET("renderPrepare");
-        static #eventPrepareStart = FudgeCore.RecyclableEvent.GET("renderPrepareStart");
-        static #eventPrepareEnd = FudgeCore.RecyclableEvent.GET("renderPrepareEnd");
+        static #eventPrepare = FudgeCore.RecyclableEvent.get("renderPrepare");
+        static #eventPrepareStart = FudgeCore.RecyclableEvent.get("renderPrepareStart");
+        static #eventPrepareEnd = FudgeCore.RecyclableEvent.get("renderPrepareEnd");
         static #defaultRootNode = new FudgeCore.Node("Root");
         static #defaultOptions = {};
         static #mapNodeToParent = new WeakMap();
@@ -17047,7 +17083,7 @@ var FudgeCore;
  * adaption of https://github.com/tsherif/webgl2examples/blob/da1153a15ebc09bb13498e5f732ef2036507740c/ssao.html
  * see here for an in depth explanation: 
 */
-precision mediump float;
+precision highp float;
 precision highp int;
 
 const float sin45 = 0.707107; // 45 degrees in radians
@@ -17149,7 +17185,7 @@ void main() {
  * https://community.arm.com/cfs-file/__key/communityserver-blogs-components-weblogfiles/00-00-00-20-66/siggraph2015_2D00_mmg_2D00_marius_2D00_notes.pdf
  * @authors Roland Heer, HFU, 2023 | Jirka Dell'Oro-Friedl, HFU, 2023 | Jonas Plotzky, HFU, 2023
  */
-precision mediump float;
+precision highp float;
 precision highp int;
 
 uniform int u_iMode; // 0: extract, 1: downsample, 2: upsample, 3: apply
@@ -17265,7 +17301,7 @@ void main() {
 * ...
 * @authors Jonas Plotzky, HFU, 2023
 */
-precision mediump float;
+precision highp float;
 precision highp int;
 
 uniform vec4 u_vctColor;
@@ -17322,7 +17358,7 @@ void main() {
 * ...
 * @authors Jonas Plotzky, HFU, 2023
 */
-precision mediump float;
+precision highp float;
 precision highp int;
 
 uniform mat4 u_mtxMeshToWorld; // u_mtxModel
@@ -17356,7 +17392,7 @@ void main() {
 /**
  * @authors Jonas Plotzky, HFU, 2025
  */
-precision mediump float;
+precision highp float;
 precision highp int;
 
 uniform vec2 u_vctTexel;
@@ -17603,7 +17639,7 @@ void main() {
 * Renders for Raycasting
 * @authors Jirka Dell'Oro-Friedl, HFU, 2019
 */
-precision mediump float;
+precision highp float;
 precision highp int;
 
 uniform int u_id;
@@ -17676,7 +17712,7 @@ void main() {
   #endif
 }`;
     FudgeCore.shaderSources["ShaderScreen.vert"] = `#version 300 es
-precision mediump float;
+precision highp float;
 precision highp int;
 /**
  * Creates a fullscreen triangle which cotains the screen quad and sets the texture coordinates accordingly.
@@ -17729,7 +17765,7 @@ void main() {
 * Universal Shader as base for many others. Controlled by compiler directives
 * @authors Jirka Dell'Oro-Friedl, HFU, 2021 | Jonas Plotzky, HFU, 2023
 */
-precision mediump float;
+precision highp float;
 precision highp int;
 
 layout(std140) uniform Node {
@@ -18034,7 +18070,7 @@ void main() {
 * Universal Shader as base for many others. Controlled by compiler directives
 * @authors 2021, Luis Keck, HFU, 2021 | Jirka Dell'Oro-Friedl, HFU, 2021 | Jonas Plotzky, HFU, 2023
 */
-precision mediump float;
+precision highp float;
 precision highp int;
 
 layout(std140) uniform Node {
